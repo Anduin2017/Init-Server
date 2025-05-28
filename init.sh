@@ -216,7 +216,7 @@ EOF
 
 # 14) Select best mirror & update
 print_ok "Selecting best mirror & updating"
-run_remote "curl -s https://gist.aiursoft.cn/anduin/879917820a6c4b268fc12c21f1b3fe7a/raw/HEAD/mirror.sh | bash"
+run_remote "curl -s https://gitlab.aiursoft.cn/anduin/init-server/-/raw/master/mirror.sh?ref_type=heads | bash"
 run_remote "sudo apt-get update"
 
 # 15) Install or upgrade latest HWE kernel if needed

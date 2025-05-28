@@ -31,7 +31,7 @@ Usually they will give you a root user with a password and SSH key access.
 Run the following commands on your **local machine**!
 
 ```bash
-init_link="https://raw.githubusercontent.com/yourusername/init-server/main/init.sh"
+init_link="https://gitlab.aiursoft.cn/anduin/init-server/-/raw/master/init.sh?ref_type=heads"
 wget $init_link -O init.sh
 chmod +x init.sh
 ```
