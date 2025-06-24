@@ -115,21 +115,66 @@ run_remote "sudo usermod -aG sudo $NEWUSER"
 print_ok "Setting passwordless sudo for $NEWUSER"
 run_remote "echo '$NEWUSER ALL=(ALL) NOPASSWD:ALL' | sudo tee /etc/sudoers.d/$NEWUSER"
 
+# # 6) Generate & persist random password (once)
+# if run_remote "[ -f /etc/$NEWUSER.pass ]" &>/dev/null; then
+#   # Test if this password is correct.
+#   PASS_IN_PLACE=$(run_remote "sudo cat /etc/$NEWUSER.pass")
+#   print_ok "Password for $NEWUSER already exists, testing validity..."
+#   if run_remote "echo '$NEWUSER:$PASS_IN_PLACE' | sudo chpasswd" &>/dev/null; then
+#     # If the password is correct, we can reuse it.
+#     print_ok "Password for $NEWUSER is already set and valid. Reusing existing password."
+#     PASS_NEW=$(run_remote "sudo cat /etc/$NEWUSER.pass")
+#   else
+#     # If the password is not correct, we need to generate a new one.
+#     print_warn "Password for $NEWUSER is not valid. Generating a new password."
+#     run_remote "sudo rm -f /etc/$NEWUSER.pass"
+#     PASS_NEW=$(uuidgen)
+#     print_ok "Setting new password for $NEWUSER"
+#     run_remote "echo '$NEWUSER:$PASS_NEW' | sudo chpasswd"
+#     run_remote "echo '$PASS_NEW' | sudo tee /etc/$NEWUSER.pass > /dev/null"
+#     run_remote "sudo chmod 600 /etc/$NEWUSER.pass"
+#     run_remote "sudo chown root:root /etc/$NEWUSER.pass"
+#     print_ok "New password generated for $NEWUSER and persisted at /etc/$NEWUSER.pass. Please back it up! It can still be used to log in via serial console or rescue mode!"
+#   fi
+# else
+#   PASS_NEW=$(uuidgen)
+#   print_ok "Setting password for $NEWUSER"
+#   run_remote "echo '$NEWUSER:$PASS_NEW' | sudo chpasswd"
+#   run_remote "echo '$PASS_NEW' | sudo tee /etc/$NEWUSER.pass > /dev/null"
+#   run_remote "sudo chmod 600 /etc/$NEWUSER.pass"
+#   run_remote "sudo chown root:root /etc/$NEWUSER.pass"
+#   print_ok "New password generated for $NEWUSER and persisted at /etc/$NEWUSER.pass. Please back it up! It can still be used to log in via serial console or rescue mode!"
+# fi
+
 # 6) Generate & persist random password (once)
-if run_remote "[ -f /etc/$NEWUSER.pass ]" &>/dev/null; then
-  # In this case, the password is already set
-  print_ok "Don't have to change password. Reusing existing password for $NEWUSER"
-  PASS_NEW=$(run_remote "sudo cat /etc/$NEWUSER.pass")
+
+# 6.1) Read or generate password candidate.
+PASS_FILE="/etc/$NEWUSER.pass"
+if run_remote "[ -f $PASS_FILE ]" &>/dev/null; then
+  print_ok "Password file $PASS_FILE exists, reading existing password."
+  PASS_CANDIDATE=$(run_remote "sudo cat $PASS_FILE")
 else
-  PASS_NEW=$(uuidgen)
-  print_ok "Setting password for $NEWUSER"
-  run_remote "echo '$NEWUSER:$PASS_NEW' | sudo chpasswd"
-  run_remote "echo '$PASS_NEW' | sudo tee /etc/$NEWUSER.pass > /dev/null"
-  run_remote "sudo chmod 600 /etc/$NEWUSER.pass"
-  run_remote "sudo chown root:root /etc/$NEWUSER.pass"
-  print_ok "New password generated for $NEWUSER and persisted at /etc/$NEWUSER.pass. Please back it up! It can still be used to log in via serial console or rescue mode!"
+  print_ok "Password file $PASS_FILE does not exist, generating a new password."
+  PASS_CANDIDATE=$(uuidgen)
 fi
 
+# 6.2) Test if the password candidate is valid. If failed, regenerate.
+if ! run_remote "echo '$NEWUSER:$PASS_CANDIDATE' | sudo chpasswd" &>/dev/null; then
+  print_warn "The old password $PASS_CANDIDATE is not valid for user $NEWUSER. Generating a new password."
+  run_remote "sudo rm -f $PASS_FILE" 2>/dev/null || true
+  PASS_CANDIDATE=$(uuidgen)
+fi
+
+# 6.3) Set the new password and persist it.
+print_ok "Setting new password for $NEWUSER"
+PASS_NEW="$PASS_CANDIDATE"
+run_remote "echo '$NEWUSER:$PASS_CANDIDATE' | sudo chpasswd"
+run_remote "echo '$PASS_CANDIDATE' | sudo tee $PASS_FILE > /dev/null"
+run_remote "sudo chmod 600 $PASS_FILE"
+run_remote "sudo chown root:root $PASS_FILE"
+print_ok "New password generated for $NEWUSER and persisted at $PASS_FILE. Please back it up! It can still be used to log in via serial console or rescue mode!"
+
+# 6.4) Save the password locally for convenience.
 local_pass_file="./password_${NEWUSER}_at_${SERVER}.txt"
 rm -f "$local_pass_file" 2>/dev/null || true
 sshpass -p "$REMOTE_PASS" ssh -q -o StrictHostKeyChecking=no \
@@ -170,7 +215,6 @@ for u in $others; do
   print_warn "Deleting user $u"
   run_remote "sudo pkill -u $u || true; sudo deluser --remove-home $u"
 done
-
 
 # 10) Reset machine-id
 print_ok "Resetting machine-id"
@@ -307,6 +351,11 @@ print_ok "Final autoremove & benchmark"
 run_remote "sudo apt-get autoremove -y --purge && \
   sudo apt-get install -y sysbench && sysbench cpu --threads=$(nproc) run && \
   sudo apt-get autoremove -y sysbench --purge"
+
+#stun stun.l.google.com:19302
+print_ok "Testing STUN connectivity"
+run_remote "sudo apt-get install -y stun-client && \
+  stun stun.l.google.com:19302"
 
 print_ok "Setup complete. Connect via: ssh $NEWUSER@$SERVER"
 
