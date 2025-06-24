@@ -163,10 +163,12 @@ if ! run_remote "echo '$NEWUSER:$PASS_CANDIDATE' | sudo chpasswd" &>/dev/null; t
   print_warn "The old password $PASS_CANDIDATE is not valid for user $NEWUSER. Generating a new password."
   run_remote "sudo rm -f $PASS_FILE" 2>/dev/null || true
   PASS_CANDIDATE=$(uuidgen)
+else
+  print_ok "Password candidate $PASS_CANDIDATE is valid for user $NEWUSER."
 fi
 
 # 6.3) Set the new password and persist it.
-print_ok "Setting new password for $NEWUSER"
+print_ok "Setting password for $NEWUSER"
 PASS_NEW="$PASS_CANDIDATE"
 run_remote "echo '$NEWUSER:$PASS_CANDIDATE' | sudo chpasswd"
 run_remote "echo '$PASS_CANDIDATE' | sudo tee $PASS_FILE > /dev/null"
