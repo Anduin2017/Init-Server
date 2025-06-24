@@ -351,13 +351,12 @@ EOF
 # 20) Final cleanup & benchmark
 print_ok "Final autoremove & benchmark"
 run_remote "sudo apt-get autoremove -y --purge && \
-  sudo apt-get install -y sysbench && sysbench cpu --threads=$(nproc) run && \
+  sudo apt-get install -y sysbench stun-client && sysbench cpu --threads=$(nproc) run && \
   sudo apt-get autoremove -y sysbench --purge"
 
 #stun stun.l.google.com:19302
 print_ok "Testing STUN connectivity"
-run_remote "sudo apt-get install -y stun-client && \
-  stun stun.l.google.com:19302"
+run_remote "stun stun.l.google.com:19302" || true
 
 print_ok "Setup complete. Connect via: ssh $NEWUSER@$SERVER"
 
