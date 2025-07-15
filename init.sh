@@ -265,7 +265,11 @@ print_ok "Selecting best mirror & updating"
 run_remote "curl -s https://gitlab.aiursoft.cn/anduin/init-server/-/raw/master/mirror.sh?ref_type=heads | bash"
 run_remote "sudo apt-get update"
 
-# 15) Install or upgrade latest HWE kernel if needed
+# 15) Install safe server
+print_ok "Installing safe server"
+run_remote "curl -sL https://gitlab.aiursoft.cn/anduin/safe-server/-/raw/master/install.sh | sudo bash"
+
+# 16) Install or upgrade latest HWE kernel if needed
 print_ok "Checking HWE kernel package on remote"
 run_remote <<'EOF'
 set -euo pipefail
@@ -301,7 +305,7 @@ else
 fi
 EOF
 
-# 16) Conditionally reboot & wait
+# 17) Conditionally reboot & wait
 if run_remote 'test -f /tmp/.reboot_flag'; then
   print_ok "Rebooting server to apply new kernel"
   run_remote "rm -f /tmp/.reboot_flag"
@@ -312,17 +316,17 @@ else
   print_ok "No new kernel installed, skipping reboot"
 fi
 
-# 17) Final updates & cleanup
+# 18) Final updates & cleanup
 print_ok "Installing upgrades & cleanup"
 run_remote "sudo apt-get update && sudo apt-get upgrade -y && sudo apt-get autoremove -y"
 
-# 18) Performance tuning
+# 19) Performance tuning
 print_ok "Tuning CPU performance & timezone"
 run_remote "sudo apt-get install -y linux-tools-$(uname -r) cpupower && \
   sudo cpupower frequency-set -g performance || true && \
   sudo timedatectl set-timezone GMT"
 
-# 19) Remove snap
+# 20) Remove snap
 print_ok "Removing snapd"
 run_remote <<'EOF'
 # 1) 如果 snapd.service 存在，就 disable 一下；否则跳过
@@ -348,7 +352,7 @@ Pin-Priority: -10
 EOP
 EOF
 
-# 20) Final cleanup & benchmark
+# 21) Final cleanup & benchmark
 print_ok "Final autoremove & benchmark"
 run_remote "sudo apt-get autoremove -y --purge && \
   sudo apt-get install -y sysbench stun-client && sysbench cpu --threads=$(nproc) run && \
