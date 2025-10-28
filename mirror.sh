@@ -68,14 +68,13 @@ find_fastest_mirror() {
         "http://tw.archive.ubuntu.com/ubuntu/"              # Taiwan
         "https://mirror.twds.com.tw/ubuntu/"                # Taiwan
         "https://ubuntu.mirrors.uk2.net/ubuntu/"            # United Kingdom
-        "http://mirror.aiursoft.cn/ubuntu/"                 # Aiursoft
+        "http://mirror.aiursoft.com/ubuntu/"                 # Aiursoft
         "http://mirrors.ustc.edu.cn/ubuntu/"                # USTC
         "http://ftp.sjtu.edu.cn/ubuntu/"                    # SJTU
         "http://mirrors.tuna.tsinghua.edu.cn/ubuntu/"       # Tsinghua
         "http://mirrors.aliyun.com/ubuntu/"                 # Aliyun
         "http://mirrors.163.com/ubuntu/"                    # NetEase
         "http://mirrors.cloud.tencent.com/ubuntu/"          # Tencent Cloud
-        "http://mirror.aiursoft.cn/ubuntu/"                 # Aiursoft
         "http://mirrors.huaweicloud.com/ubuntu/"            # Huawei Cloud
         "http://mirrors.zju.edu.cn/ubuntu/"                 # Zhejiang University
         "http://azure.archive.ubuntu.com/ubuntu/"           # Azure
