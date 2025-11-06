@@ -205,7 +205,7 @@ wait_ssh
 # 8) Harden SSH
 print_ok "Hardening SSH settings"
 run_remote "sudo sed -i 's/PermitRootLogin yes/PermitRootLogin no/; \
-  s/PasswordAuthentication yes/PasswordAuthentication no/; \
+  s/^[# ]*PasswordAuthentication .*/PasswordAuthentication no/; \
   s/#PubkeyAuthentication yes/PubkeyAuthentication yes/' /etc/ssh/sshd_config && \
   sudo systemctl restart sshd || sudo systemctl restart ssh"
 
