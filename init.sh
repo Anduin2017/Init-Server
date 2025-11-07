@@ -265,6 +265,9 @@ print_ok "Selecting best mirror & updating"
 run_remote "curl -s https://gitlab.aiursoft.com/anduin/init-server/-/raw/master/mirror.sh?ref_type=heads | bash"
 run_remote "sudo apt-get update"
 
+print_ok "Auto-configuring swap file"
+run_remote "curl -s https://gitlab.aiursoft.com/anduin/init-server/-/raw/master/autoswap.sh?ref_type=heads | bash"
+
 # 15) Install clean traffic
 print_ok "Installing clean traffic"
 run_remote "curl -sL https://gitlab.aiursoft.com/anduin/clean-traffic/-/raw/master/install.sh | sudo bash"
