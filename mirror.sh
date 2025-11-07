@@ -88,10 +88,29 @@ find_fastest_mirror() {
     )
     
     declare -A results
-    
+    local private_mirror_found=""
+
     # Test speed of each mirror
     for mirror in "${mirrors[@]}"; do
         echo "Testing $mirror ..." >&2
+
+        local hostname
+        hostname=$(echo "$mirror" | awk -F'/' '{print $3}')
+        
+        local ip_address
+        # Use 'getent' (part of glibc) to get the IP, handle failures with '|| true'
+        ip_address=$(getent ahostsv4 "$hostname" | awk '{print $1; exit}' 2>/dev/null) || true
+
+        if [ -n "$ip_address" ]; then
+            # Check if the IP is in RFC 1918 ranges (private)
+            if echo "$ip_address" | grep -E -q '^(10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.|192\.168\.)'; then
+                echo "  Found private IP $ip_address. Selecting $mirror immediately." >&2
+                private_mirror_found="$mirror"
+                break # Exit the for loop, we found our winner
+            fi
+        fi
+
+        # If not a private IP, proceed with the speed test as normal
         response="$(curl -o /dev/null -s -w "%{http_code} %{time_total}\n" \
                   --connect-timeout 1 --max-time 3 "${mirror}dists/${codename}/Release")"
         
@@ -106,27 +125,39 @@ find_fastest_mirror() {
             results["$mirror"]="9999"
         fi
     done
-    
-    # Sort mirrors by response time
-    sorted_mirrors="$(
-        for url in "${!results[@]}"; do
-            echo "$url ${results[$url]}"
-        done | sort -k2 -n
-    )"
-    
-    echo >&2
-    echo "=== Mirrors sorted by response time (ascending) ===" >&2
-    echo "$sorted_mirrors" >&2
-    echo >&2
-    
-    # Choose the fastest mirror
-    fastest_mirror="$(echo "$sorted_mirrors" | head -n 1 | awk '{print $1}')"
-    
-    if [[ "$fastest_mirror" == "" || "${results[$fastest_mirror]}" == "9999" ]]; then
-        echo "No usable mirror found, using default mirror" >&2
-        fastest_mirror="http://archive.ubuntu.com/ubuntu/"
-    fi
-    
+
+    # --- BEGIN MODIFICATION: Check if private mirror was found ---
+    if [ -n "$private_mirror_found" ]; then
+        echo >&2
+        echo "=== Private mirror selected ===" >&2
+        echo "Using $private_mirror_found" >&2
+        echo >&2
+        
+        fastest_mirror="$private_mirror_found"
+    else
+    # --- END MODIFICATION ---
+
+        # Sort mirrors by response time (Only if no private mirror was found)
+        sorted_mirrors="$(
+            for url in "${!results[@]}"; do
+                echo "$url ${results[$url]}"
+            done | sort -k2 -n
+        )"
+        
+        echo >&2
+        echo "=== Mirrors sorted by response time (ascending) ===" >&2
+        echo "$sorted_mirrors" >&2
+        echo >&2
+        
+        # Choose the fastest mirror
+        fastest_mirror="$(echo "$sorted_mirrors" | head -n 1 | awk '{print $1}')"
+        
+        if [[ "$fastest_mirror" == "" || "${results[$fastest_mirror]}" == "9999" ]]; then
+            echo "No usable mirror found, using default mirror" >&2
+            fastest_mirror="http://archive.ubuntu.com/ubuntu/"
+        fi
+    fi # End of the 'if private mirror' block
+
     echo "Fastest mirror found: $fastest_mirror" >&2
     echo >&2
     
@@ -191,7 +222,7 @@ EOF
 main() {
     # Ensure required packages are installed
     sudo apt update
-    sudo apt install -y curl lsb-release
+    sudo apt install -y curl lsb-release libc-bin
     
     # Get current source format
     format=$(check_apt_format)
