@@ -122,7 +122,8 @@ auto_swap_setup() {
     
     # Add the new entry
     echo "Adding new swap entry to /etc/fstab..."
-    if ! echo "$swap_file none swap sw 0 0" | sudo tee -a /fstab > /dev/null; then
+    # Correct path: /etc/fstab
+    if ! echo "$swap_file none swap sw 0 0" | sudo tee -a /etc/fstab > /dev/null; then
         echo "Error: Failed to automatically update /etc/fstab." >&2
         echo "Warning: You may need to manually add '$swap_file none swap sw 0 0' to /etc/fstab." >&2
     else
