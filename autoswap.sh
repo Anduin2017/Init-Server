@@ -34,10 +34,33 @@ auto_swap_setup() {
 
     if [ "$diff" -lt "$tolerance" ]; then
         echo "Swap file $swap_file already exists and has the correct size ($ram_human)."
+        
+        # Activate swap if it's not active
         if ! grep -q "^$swap_file" /proc/swaps; then
             echo "Warning: Swap file is not active. Activating..."
             sudo swapon "$swap_file"
         fi
+
+        # --- FIX: CHECK FSTAB HERE ---
+        # Use a robust grep to check for the path followed by whitespace
+        if ! grep -q -E "^${swap_file//\//\\/}[[:space:]]" /etc/fstab; then
+            echo "Warning: /etc/fstab entry is missing. Adding..."
+            
+            # Remove any old (potentially commented out) /swapfile entries
+            if grep -q "^$swap_file" /etc/fstab; then
+                echo "Removing old/commented swap entry from /etc/fstab..."
+                sudo sed -i '\%^/swapfile%d' /etc/fstab
+            fi
+            
+            # Add the new entry
+            if ! echo "$swap_file none swap sw 0 0" | sudo tee -a /etc/fstab > /dev/null; then
+                 echo "Error: Failed to automatically update /etc/fstab." >&2
+            else
+                 echo "/etc/fstab updated successfully."
+            fi
+        fi
+        # --- END FIX ---
+
         echo "Swap is already configured correctly."
         return 0
     fi
