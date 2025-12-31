@@ -186,9 +186,26 @@ sudo chown "$USER:$USER" "$local_pass_file"
 sudo chmod 600 "$local_pass_file"
 print_ok "Password for $NEWUSER saved locally at $local_pass_file [DO NOT SHARE THIS FILE! IT CAN BE USED TO LOG IN VIA SERIAL CONSOLE OR RESCUE MODE!]"
 
-# 7) Copy SSH key (only if absent)
-[ ! -f ~/.ssh/id_rsa.pub ] && run_local ssh-keygen -t rsa -N "" -f ~/.ssh/id_rsa
-PUBKEY=$(<~/.ssh/id_rsa.pub)
+# 7) Get SSH public key (prefer YubiKey from ssh-add, fallback to file or generate)
+print_ok "Checking for SSH keys"
+
+# First, try to get key from ssh-agent (YubiKey resident keys)
+PUBKEY=$(ssh-add -L 2>/dev/null | head -n 1 || true)
+
+if [ -n "$PUBKEY" ]; then
+  print_ok "Found SSH key in ssh-agent (YubiKey or loaded key)"
+else
+  # No key in agent, check for existing file
+  if [ -f ~/.ssh/id_rsa.pub ]; then
+    print_ok "Found existing SSH key file"
+    PUBKEY=$(< ~/.ssh/id_rsa.pub)
+  else
+    # No key found anywhere, generate new one
+    print_ok "No SSH key found, generating new RSA key"
+    run_local ssh-keygen -t rsa -N "" -f ~/.ssh/id_rsa
+    PUBKEY=$(< ~/.ssh/id_rsa.pub)
+  fi
+fi
 print_ok "Ensuring SSH key in authorized_keys"
 run_remote "mkdir -p /home/$NEWUSER/.ssh && \
   sudo bash -c 'grep -qxF \"$PUBKEY\" /home/$NEWUSER/.ssh/authorized_keys 2>/dev/null || \
