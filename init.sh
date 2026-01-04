@@ -59,6 +59,12 @@ areYouSure(){
 #-----------------------------------
 run_local(){   print_ok "Local: $*"; "$@"; }
 run_remote(){  sshpass -p "$REMOTE_PASS" ssh -o StrictHostKeyChecking=no "$REMOTE_USER@$SERVER" "$*"; }
+run_remote_sudo(){
+  local cmd="$1"
+  local safe_pass="${REMOTE_PASS//\'/\'\\\'\'}"
+  local safe_cmd="${cmd//\'/\'\\\'\'}"
+  run_remote "echo '$safe_pass' | sudo -S -p '' bash -c '$safe_cmd'"
+}
 wait_ssh(){
   print_ok "Waiting for SSH on $SERVER... (Running ssh $REMOTE_USER@$SERVER)"
   until sshpass -p "$REMOTE_PASS" ssh -q \
@@ -92,8 +98,8 @@ wait_ssh
 CURRENT_HOST=$(run_remote "hostname")
 if [[ "$CURRENT_HOST" != "$HOSTNAME" ]]; then
   print_ok "Setting hostname to $HOSTNAME"
-  run_remote "sudo hostnamectl set-hostname $HOSTNAME"
-  run_remote "sudo reboot" || true
+  run_remote_sudo "hostnamectl set-hostname $HOSTNAME"
+  run_remote_sudo "reboot" || true
   print_ok "Server rebooting..."
   sleep 5
   wait_ssh
@@ -106,14 +112,14 @@ if run_remote "id -u $NEWUSER" &>/dev/null; then
   print_ok "User $NEWUSER exists"
 else
   print_ok "Creating user $NEWUSER"
-  run_remote "sudo adduser --disabled-password --gecos '' $NEWUSER"
+  run_remote_sudo "adduser --disabled-password --gecos '' $NEWUSER"
 fi
 
 # 5) Grant sudo & set up passwordless
 print_ok "Granting sudo to $NEWUSER"
-run_remote "sudo usermod -aG sudo $NEWUSER"
+run_remote_sudo "usermod -aG sudo $NEWUSER"
 print_ok "Setting passwordless sudo for $NEWUSER"
-run_remote "echo '$NEWUSER ALL=(ALL) NOPASSWD:ALL' | sudo tee /etc/sudoers.d/$NEWUSER"
+run_remote_sudo "echo '$NEWUSER ALL=(ALL) NOPASSWD:ALL' | tee /etc/sudoers.d/$NEWUSER"
 
 # # 6) Generate & persist random password (once)
 # if run_remote "[ -f /etc/$NEWUSER.pass ]" &>/dev/null; then
@@ -152,36 +158,37 @@ run_remote "echo '$NEWUSER ALL=(ALL) NOPASSWD:ALL' | sudo tee /etc/sudoers.d/$NE
 PASS_FILE="/etc/$NEWUSER.pass"
 if run_remote "[ -f $PASS_FILE ]" &>/dev/null; then
   print_ok "Password file $PASS_FILE exists, reading existing password."
-  PASS_CANDIDATE=$(run_remote "sudo cat $PASS_FILE")
+  PASS_CANDIDATE=$(run_remote_sudo "cat $PASS_FILE")
 else
   print_ok "Password file $PASS_FILE does not exist, generating a new password."
   PASS_CANDIDATE=$(uuidgen)
 fi
 
 # 6.2) Test if the password candidate is valid. If failed, regenerate.
-if ! run_remote "echo '$NEWUSER:$PASS_CANDIDATE' | sudo chpasswd" &>/dev/null; then
+# 6.2) Test if the password candidate is valid. If failed, regenerate.
+if ! run_remote_sudo "echo '$NEWUSER:$PASS_CANDIDATE' | chpasswd" &>/dev/null; then
   print_warn "The old password $PASS_CANDIDATE is not valid for user $NEWUSER. Generating a new password."
-  run_remote "sudo rm -f $PASS_FILE" 2>/dev/null || true
+  run_remote_sudo "rm -f $PASS_FILE" 2>/dev/null || true
   PASS_CANDIDATE=$(uuidgen)
 else
   print_ok "Password candidate $PASS_CANDIDATE is valid for user $NEWUSER."
 fi
 
 # 6.3) Set the new password and persist it.
+# 6.3) Set the new password and persist it.
 print_ok "Setting password for $NEWUSER"
 PASS_NEW="$PASS_CANDIDATE"
-run_remote "echo '$NEWUSER:$PASS_CANDIDATE' | sudo chpasswd"
-run_remote "echo '$PASS_CANDIDATE' | sudo tee $PASS_FILE > /dev/null"
-run_remote "sudo chmod 600 $PASS_FILE"
-run_remote "sudo chown root:root $PASS_FILE"
+run_remote_sudo "echo '$NEWUSER:$PASS_CANDIDATE' | chpasswd"
+run_remote_sudo "echo '$PASS_CANDIDATE' | tee $PASS_FILE > /dev/null"
+run_remote_sudo "chmod 600 $PASS_FILE"
+run_remote_sudo "chown root:root $PASS_FILE"
 print_ok "New password generated for $NEWUSER and persisted at $PASS_FILE. Please back it up! It can still be used to log in via serial console or rescue mode!"
 
 # 6.4) Save the password locally for convenience.
 local_pass_file="./password_${NEWUSER}_at_${SERVER}.txt"
 rm -f "$local_pass_file" 2>/dev/null || true
-sshpass -p "$REMOTE_PASS" ssh -q -o StrictHostKeyChecking=no \
-  "$REMOTE_USER@$SERVER" "sudo cat /etc/$NEWUSER.pass" \
-  > "$local_pass_file"
+# We use run_remote_sudo to cat the file. Run_remote returns stdout.
+run_remote_sudo "cat /etc/$NEWUSER.pass" > "$local_pass_file"
 sudo chown "$USER:$USER" "$local_pass_file"
 sudo chmod 600 "$local_pass_file"
 print_ok "Password for $NEWUSER saved locally at $local_pass_file [DO NOT SHARE THIS FILE! IT CAN BE USED TO LOG IN VIA SERIAL CONSOLE OR RESCUE MODE!]"
@@ -207,12 +214,13 @@ else
   fi
 fi
 print_ok "Ensuring SSH key in authorized_keys"
-run_remote "mkdir -p /home/$NEWUSER/.ssh && \
-  sudo bash -c 'grep -qxF \"$PUBKEY\" /home/$NEWUSER/.ssh/authorized_keys 2>/dev/null || \
-  echo \"$PUBKEY\" >> /home/$NEWUSER/.ssh/authorized_keys' && \
-  sudo chown -R $NEWUSER:$NEWUSER /home/$NEWUSER/.ssh && \
-  sudo chmod 700 /home/$NEWUSER/.ssh && \
-  sudo chmod 600 /home/$NEWUSER/.ssh/authorized_keys"
+# Entire block runs as root via run_remote_sudo
+run_remote_sudo "mkdir -p /home/$NEWUSER/.ssh && \
+  (grep -qxF \"$PUBKEY\" /home/$NEWUSER/.ssh/authorized_keys 2>/dev/null || \
+  echo \"$PUBKEY\" >> /home/$NEWUSER/.ssh/authorized_keys) && \
+  chown -R $NEWUSER:$NEWUSER /home/$NEWUSER/.ssh && \
+  chmod 700 /home/$NEWUSER/.ssh && \
+  chmod 600 /home/$NEWUSER/.ssh/authorized_keys"
 
 # Switch to new user for subsequent operations
 print_ok "Switching to new user $NEWUSER"
