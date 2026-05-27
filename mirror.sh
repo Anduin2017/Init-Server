@@ -68,7 +68,6 @@ find_fastest_mirror() {
         "http://tw.archive.ubuntu.com/ubuntu/"              # Taiwan
         "https://mirror.twds.com.tw/ubuntu/"                # Taiwan
         "https://ubuntu.mirrors.uk2.net/ubuntu/"            # United Kingdom
-        "http://mirror.aiursoft.com/ubuntu/"                 # Aiursoft
         "http://mirrors.ustc.edu.cn/ubuntu/"                # USTC
         "http://ftp.sjtu.edu.cn/ubuntu/"                    # SJTU
         "http://mirrors.tuna.tsinghua.edu.cn/ubuntu/"       # Tsinghua
