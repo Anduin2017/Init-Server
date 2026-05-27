@@ -39,7 +39,16 @@ find_fastest_mirror() {
     
     # Get current Ubuntu codename
     codename=$(lsb_release -cs)
-    
+
+    # Detect architecture
+    local arch
+    arch=$(dpkg --print-architecture 2>/dev/null || uname -m)
+    local is_arm=false
+    if [[ "$arch" == "arm64" ]] || [[ "$arch" == "aarch64" ]]; then
+        is_arm=true
+        echo "ARM architecture detected ($arch), will use ports mirrors" >&2
+    fi
+
     # Define list of potential mirrors
     mirrors=(
         "https://archive.ubuntu.com/ubuntu/"
@@ -83,6 +92,21 @@ find_fastest_mirror() {
         "https://mirror.kku.ac.th/ubuntu/"                  # Thailand
         "https://mirror.bizflycloud.vn/ubuntu/"             # Vietnam
     )
+
+    # Transform mirrors to ports URLs on ARM
+    if $is_arm; then
+        local transformed=()
+        for m in "${mirrors[@]}"; do
+            if [[ "$m" =~ archive\.ubuntu\.com ]]; then
+                # archive.ubuntu.com -> ports.ubuntu.com for ARM
+                transformed+=("$(echo "$m" | sed -E 's|https?://[^/]*archive\.ubuntu\.com/ubuntu/|http://ports.ubuntu.com/ubuntu-ports/|')")
+            elif [[ "$m" == *"/ubuntu/"* ]]; then
+                transformed+=("${m//\/ubuntu\//\/ubuntu-ports\/}")
+            fi
+            # Mirrors without /ubuntu/ path are excluded on ARM
+        done
+        mirrors=("${transformed[@]}")
+    fi
     
     declare -A results
     local private_mirror_found=""
@@ -151,7 +175,11 @@ find_fastest_mirror() {
         
         if [[ "$fastest_mirror" == "" || "${results[$fastest_mirror]}" == "9999" ]]; then
             echo "No usable mirror found, using default mirror" >&2
-            fastest_mirror="http://archive.ubuntu.com/ubuntu/"
+            if $is_arm; then
+                fastest_mirror="http://ports.ubuntu.com/ubuntu-ports/"
+            else
+                fastest_mirror="http://archive.ubuntu.com/ubuntu/"
+            fi
         fi
     fi # End of the 'if private mirror' block
 
