@@ -287,15 +287,15 @@ EOF
 
 # 14) Select best mirror & update
 print_ok "Selecting best mirror & updating"
-run_remote "curl -s https://gitlab.aiursoft.com/anduin/init-server/-/raw/master/mirror.sh?ref_type=heads | bash"
+run_remote "curl -sL https://github.com/Anduin2017/Init-Server/raw/refs/heads/master/mirror.sh | bash"
 run_remote "sudo apt-get update"
 
 print_ok "Auto-configuring swap file"
-run_remote "curl -s https://gitlab.aiursoft.com/anduin/init-server/-/raw/master/autoswap.sh?ref_type=heads | bash"
+run_remote "curl -sL https://github.com/Anduin2017/Init-Server/raw/refs/heads/master/autoswap.sh | bash"
 
 # 15) Install clean traffic
 print_ok "Installing clean traffic"
-run_remote "curl -sL https://gitlab.aiursoft.com/anduin/clean-traffic/-/raw/master/install.sh | sudo bash"
+run_remote "curl -sL https://github.com/Anduin2017/clean-traffic/raw/master/install.sh | sudo bash"
 
 # 16) Install or upgrade latest HWE kernel if needed
 print_ok "Checking HWE kernel package on remote"
