@@ -58,7 +58,7 @@ areYouSure(){
 # Helpers
 #-----------------------------------
 run_local(){   print_ok "Local: $*"; "$@"; }
-run_remote(){  sshpass -p "$REMOTE_PASS" ssh -o StrictHostKeyChecking=no "$REMOTE_USER@$SERVER" "$*"; }
+run_remote(){  sshpass -p "$REMOTE_PASS" ssh $SSH_PORT_OPT -o StrictHostKeyChecking=no "$REMOTE_USER@$SERVER" "$*"; }
 run_remote_sudo(){
   local cmd="$1"
   local safe_pass="${REMOTE_PASS//\'/\'\\\'\'}"
@@ -66,8 +66,8 @@ run_remote_sudo(){
   run_remote "echo '$safe_pass' | sudo -S -p '' bash -c '$safe_cmd'"
 }
 wait_ssh(){
-  print_ok "Waiting for SSH on $SERVER... (Running ssh $REMOTE_USER@$SERVER)"
-  until sshpass -p "$REMOTE_PASS" ssh -q \
+  print_ok "Waiting for SSH on $SERVER... (Running ssh $SSH_PORT_OPT $REMOTE_USER@$SERVER)"
+  until sshpass -p "$REMOTE_PASS" ssh $SSH_PORT_OPT -q \
       -o StrictHostKeyChecking=no \
       -o ConnectTimeout=5 \
       "$REMOTE_USER@$SERVER" exit; do
@@ -77,13 +77,17 @@ wait_ssh(){
   print_ok "SSH available."
 }
 
-usage(){ echo "Usage: $0 <orig_user> <orig_pass> <server> <new_hostname> <new_user>"; exit 1; }
+usage(){ echo "Usage: $0 <orig_user> <orig_pass> <server> <new_hostname> <new_user> [ssh_port]"; exit 1; }
 
 #-----------------------------------
 # Main
 #-----------------------------------
-[ $# -ne 5 ] && usage
+[ $# -lt 5 ] && usage
+[ $# -gt 6 ] && usage
 USER="$1"; PASS="$2"; SERVER="$3"; HOSTNAME="$4"; NEWUSER="$5"
+SSH_PORT="${6:-22}"
+SSH_PORT_OPT=""
+[ "$SSH_PORT" != "22" ] && SSH_PORT_OPT="-p $SSH_PORT"
 REMOTE_USER="$USER"; REMOTE_PASS="$PASS"
 
 # 1) Install sshpass locally
@@ -390,7 +394,7 @@ run_remote "sudo apt-get autoremove -y --purge && \
 print_ok "Testing STUN connectivity"
 run_remote "stun stun.l.google.com:19302" || true
 
-print_ok "Setup complete. Connect via: ssh $NEWUSER@$SERVER"
+print_ok "Setup complete. Connect via: ssh $SSH_PORT_OPT $NEWUSER@$SERVER"
 
 # After this script, server will:
 
