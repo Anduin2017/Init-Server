@@ -384,7 +384,38 @@ Pin-Priority: -10
 EOP
 EOF
 
-# 21) Final cleanup & benchmark
+# 21) Remove CUPS printing stack (attack surface reduction)
+print_ok "Removing CUPS printing stack"
+run_remote <<'EOF'
+# cupsd runs as root on localhost:631 — local privilege escalation risk
+# cups-browsed historically listens on UDP 631 (0.0.0.0) — remote RCE risk (CVE-2024-47176)
+# AnduinOS desktops/servers rarely need network printer auto-discovery
+
+if systemctl list-unit-files 2>/dev/null | grep -q '^cups-browsed\.service'; then
+  sudo systemctl disable --now cups-browsed || true
+  sudo systemctl mask cups-browsed || true
+else
+  echo "[  OK  ] cups-browsed.service not found, skipping"
+fi
+
+if systemctl list-unit-files 2>/dev/null | grep -q '^cups\.service'; then
+  sudo systemctl disable --now cups || true
+  sudo systemctl mask cups || true
+else
+  echo "[  OK  ] cups.service not found, skipping"
+fi
+
+# Purge packages if present
+for pkg in cups-browsed cups-daemon cups cups-core cups-client cups-common; do
+  if dpkg -l "$pkg" 2>/dev/null | grep -q '^ii'; then
+    sudo apt-get purge -y "$pkg"
+  else
+    echo "[  OK  ] $pkg not installed, skipping"
+  fi
+done
+EOF
+
+# 22) Final cleanup & benchmark
 print_ok "Final autoremove & benchmark"
 run_remote "sudo apt-get autoremove -y --purge && \
   sudo apt-get install -y sysbench stun-client && sysbench cpu --threads=$(nproc) run && \
