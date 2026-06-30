@@ -84,11 +84,10 @@ usage(){ echo "Usage: $0 <orig_user> <orig_pass> <server> <new_hostname> <new_us
 #-----------------------------------
 [ $# -lt 5 ] && usage
 [ $# -gt 6 ] && usage
-USER="$1"; PASS="$2"; SERVER="$3"; HOSTNAME="$4"; NEWUSER="$5"
+REMOTE_USER="$1"; REMOTE_PASS="$2"; SERVER="$3"; HOSTNAME="$4"; NEWUSER="$5"
 SSH_PORT="${6:-22}"
 SSH_PORT_OPT=""
 [ "$SSH_PORT" != "22" ] && SSH_PORT_OPT="-p $SSH_PORT"
-REMOTE_USER="$USER"; REMOTE_PASS="$PASS"
 
 # 1) Install sshpass locally
 run_local sudo apt-get update -y
@@ -289,19 +288,56 @@ SYSCTL
 }
 EOF
 
-# 14) Select best mirror & update
+# 14) Upload GitHub fetch helper with fallback proxy support
+print_ok "Uploading GitHub fetch helper to remote"
+run_remote <<'ENDOFSCRIPT'
+cat > /tmp/gh-fetch.sh << 'INNER_EOF'
+#!/bin/bash
+# GitHub fetch helper — tries direct then proxy fallbacks for raw.githubusercontent.com
+# Usage: gh-fetch.sh <raw_path>
+# Example: gh-fetch.sh /Anduin2017/Init-Server/refs/heads/master/mirror.sh
+set -euo pipefail
+
+raw_path="$1"
+
+urls=(
+  "https://raw.githubusercontent.com$raw_path"
+  "https://ghproxy.com/https://raw.githubusercontent.com$raw_path"
+  "https://mirror.ghproxy.com/https://raw.githubusercontent.com$raw_path"
+  "https://gh-proxy.com/https://raw.githubusercontent.com$raw_path"
+  "https://ghproxy.net/https://raw.githubusercontent.com$raw_path"
+)
+
+for url in "${urls[@]}"; do
+  domain="${url#*//}"
+  domain="${domain%%/*}"
+  echo "[ INFO ] Trying $domain ..." >&2
+  if curl -sL --connect-timeout 5 --max-time 20 "$url" 2>/dev/null; then
+    echo "[  OK  ] Fetched from $domain" >&2
+    exit 0
+  fi
+  echo "[ WARN ] Timed out or failed: $domain, trying next..." >&2
+done
+
+echo "[FAILED] All sources exhausted for: $raw_path" >&2
+exit 1
+INNER_EOF
+chmod +x /tmp/gh-fetch.sh
+ENDOFSCRIPT
+
+# 15) Select best mirror & update
 print_ok "Selecting best mirror & updating"
-run_remote "curl -sL https://github.com/Anduin2017/Init-Server/raw/refs/heads/master/mirror.sh | bash"
+run_remote "/tmp/gh-fetch.sh /Anduin2017/Init-Server/refs/heads/master/mirror.sh | bash"
 run_remote "sudo apt-get update"
 
 print_ok "Auto-configuring swap file"
-run_remote "curl -sL https://github.com/Anduin2017/Init-Server/raw/refs/heads/master/autoswap.sh | bash"
+run_remote "/tmp/gh-fetch.sh /Anduin2017/Init-Server/refs/heads/master/autoswap.sh | bash"
 
-# 15) Install clean traffic
+# 16) Install clean traffic
 print_ok "Installing clean traffic"
-run_remote "curl -sL https://github.com/Anduin2017/clean-traffic/raw/master/install.sh | sudo bash"
+run_remote "/tmp/gh-fetch.sh /Anduin2017/clean-traffic/master/install.sh | sudo bash"
 
-# 16) Install or upgrade latest HWE kernel if needed
+# 17) Install or upgrade latest HWE kernel if needed
 print_ok "Checking HWE kernel package on remote"
 run_remote <<'EOF'
 set -euo pipefail
@@ -337,7 +373,7 @@ else
 fi
 EOF
 
-# 17) Conditionally reboot & wait
+# 18) Conditionally reboot & wait
 if run_remote 'test -f /tmp/.reboot_flag'; then
   print_ok "Rebooting server to apply new kernel"
   run_remote "rm -f /tmp/.reboot_flag"
@@ -348,17 +384,17 @@ else
   print_ok "No new kernel installed, skipping reboot"
 fi
 
-# 18) Final updates & cleanup
+# 19) Final updates & cleanup
 print_ok "Installing upgrades & cleanup"
 run_remote "sudo apt-get update && sudo apt-get upgrade -y && sudo apt-get autoremove -y"
 
-# 19) Performance tuning
+# 20) Performance tuning
 print_ok "Tuning CPU performance & timezone"
 run_remote "sudo apt-get install -y linux-tools-$(uname -r) cpupower && \
   sudo cpupower frequency-set -g performance || true && \
   sudo timedatectl set-timezone GMT"
 
-# 20) Remove snap
+# 21) Remove snap
 print_ok "Removing snapd"
 run_remote <<'EOF'
 # 1) 如果 snapd.service 存在，就 disable 一下；否则跳过
@@ -384,7 +420,7 @@ Pin-Priority: -10
 EOP
 EOF
 
-# 21) Remove CUPS printing stack (attack surface reduction)
+# 22) Remove CUPS printing stack (attack surface reduction)
 print_ok "Removing CUPS printing stack"
 run_remote <<'EOF'
 # cupsd runs as root on localhost:631 — local privilege escalation risk
@@ -415,7 +451,7 @@ for pkg in cups-browsed cups-daemon cups cups-core cups-client cups-common; do
 done
 EOF
 
-# 22) Final cleanup & benchmark
+# 23) Final cleanup & benchmark
 print_ok "Final autoremove & benchmark"
 run_remote "sudo apt-get autoremove -y --purge && \
   sudo apt-get install -y sysbench stun-client && sysbench cpu --threads=$(nproc) run && \
